@@ -1,46 +1,38 @@
-const { ether, balance } = require('@openzeppelin/test-helpers');
-const { accounts, contract } = require('@openzeppelin/test-environment');
-
-const SideEntranceLenderPool = contract.fromArtifact('SideEntranceLenderPool');
-const AttackerSideEntrace = contract.fromArtifact('AttackerSideEntrance')
-
+const { ethers } = require('hardhat');
 const { expect } = require('chai');
+const { setBalance } = require('@nomicfoundation/hardhat-network-helpers');
 
 describe('[Challenge] Side entrance', function () {
+    let deployer, player;
+    let pool;
 
-    const [deployer, attacker, ...otherAccounts] = accounts;
-
-    const ETHER_IN_POOL = ether('1000');
+    const ETHER_IN_POOL = 1000n * 10n ** 18n;
+    const PLAYER_INITIAL_ETH_BALANCE = 1n * 10n ** 18n;
 
     before(async function () {
-        /** SETUP SCENARIO */
-        this.pool = await SideEntranceLenderPool.new({ from: deployer });
-        this.attackerSideEntrance = await AttackerSideEntrace.new({ from: attacker });
+        /** SETUP SCENARIO - NO NEED TO CHANGE ANYTHING HERE */
+        [deployer, player] = await ethers.getSigners();
 
-        await this.pool.deposit({ from: deployer, value: ETHER_IN_POOL });
+        // Deploy pool and fund it
+        pool = await (await ethers.getContractFactory('SideEntranceLenderPool', deployer)).deploy();
+        await pool.deposit({ value: ETHER_IN_POOL });
+        expect(await ethers.provider.getBalance(pool.address)).to.equal(ETHER_IN_POOL);
 
-        this.attackerInitialEthBalance = await balance.current(attacker);
+        // Player starts with limited ETH in balance
+        await setBalance(player.address, PLAYER_INITIAL_ETH_BALANCE);
+        expect(await ethers.provider.getBalance(player.address)).to.eq(PLAYER_INITIAL_ETH_BALANCE);
 
-        expect(
-            await balance.current(this.pool.address)
-        ).to.be.bignumber.equal(ETHER_IN_POOL);
     });
 
-    it('Exploit', async function () {
-        await this.attackerSideEntrance.attack(this.pool.address, { from: attacker });
+    it('Execution', async function () {
+        /** CODE YOUR SOLUTION HERE */
     });
 
     after(async function () {
-        /** SUCCESS CONDITIONS */
-        expect(
-            await balance.current(this.pool.address)
-        ).to.be.bignumber.equal('0');
+        /** SUCCESS CONDITIONS - NO NEED TO CHANGE ANYTHING HERE */
 
-        // Not checking exactly how much is the final balance of the attacker,
-        // because it'll depend on how much gas the attacker spends in the attack
-        // If there were no gas costs, it would be balance before attack + ETHER_IN_POOL
-        expect(
-            await balance.current(attacker)
-        ).to.be.bignumber.gt(this.attackerInitialEthBalance);
+        // Player took all ETH from the pool
+        expect(await ethers.provider.getBalance(pool.address)).to.be.equal(0);
+        expect(await ethers.provider.getBalance(player.address)).to.be.gt(ETHER_IN_POOL);
     });
 });
